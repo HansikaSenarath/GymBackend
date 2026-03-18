@@ -1,20 +1,17 @@
-import transporter from "../config/mailer.js";
+import { Resend } from "resend";
 
-/**
- * Sends two emails on contact form submission:
- * 1. Notification to the gym owner
- * 2. Confirmation/reference email to the user
- */
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 export const sendContactMail = async ({ name, email, message }) => {
-    const gymEmail = process.env.MAIL_USER;
-    const gymName = process.env.GYM_NAME || "PowerFit Gym";
+  const gymEmail = process.env.RESEND_FROM_EMAIL; // must be a verified domain email in Resend
+  const gymName = process.env.GYM_NAME || "PowerFit Gym";
 
-    // --- Email 1: Notify gym owner ---
-    const ownerMail = {
-        from: `"${gymName} Contact Form" <${gymEmail}>`,
-        to: gymEmail,
-        subject: `New Inquiry from ${name}`,
-        html: `
+  // --- Email 1: Notify gym owner ---
+  const ownerResult = await resend.emails.send({
+    from: `${gymName} Contact Form <${gymEmail}>`,
+    to: [gymEmail],
+    subject: `New Inquiry from ${name}`,
+    html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
         <h2 style="color: #f97316; margin-bottom: 4px;">New Contact Form Submission</h2>
         <p style="color: #6b7280; margin-top: 0;">Someone just reached out via the website.</p>
@@ -37,14 +34,18 @@ export const sendContactMail = async ({ name, email, message }) => {
         <p style="color: #9ca3af; font-size: 12px;">Sent from ${gymName} website contact form.</p>
       </div>
     `,
-    };
+  });
 
-    // --- Email 2: Confirmation to user ---
-    const userMail = {
-        from: `"${gymName}" <${gymEmail}>`,
-        to: email,
-        subject: `We received your message, ${name}!`,
-        html: `
+  if (ownerResult.error) {
+    throw new Error(`Owner mail failed: ${ownerResult.error.message}`);
+  }
+
+  // --- Email 2: Confirmation to user ---
+  const userResult = await resend.emails.send({
+    from: `${gymName} <${gymEmail}>`,
+    to: [email],
+    subject: `We received your message, ${name}!`,
+    html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
         <h2 style="color: #f97316;">Thanks for reaching out, ${name}!</h2>
         <p style="color: #374151;">We've received your message and will get back to you within <strong>24–48 hours</strong>.</p>
@@ -61,10 +62,9 @@ export const sendContactMail = async ({ name, email, message }) => {
         <p style="color: #9ca3af; font-size: 12px;">© ${new Date().getFullYear()} ${gymName}. All rights reserved.</p>
       </div>
     `,
-    };
+  });
 
-    await Promise.all([
-        transporter.sendMail(ownerMail),
-        transporter.sendMail(userMail),
-    ]);
+  if (userResult.error) {
+    throw new Error(`User mail failed: ${userResult.error.message}`);
+  }
 };
